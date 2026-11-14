@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Federal Tax Estimator</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="nav">
+    <h1>Tax Estimator</h1>
+    <form method="get" action="/">
+      <fieldset>
+        <legend>Income</legend>
+        <label>Gross income <small>before 401(k)</small>
+          <input type="text" name="income" inputmode="decimal" placeholder="85,000" value="{{.IncomeIn}}" required>
+        </label>
+        <label>Filing status
+          <select name="status">
+            <option value="single"{{if eq (printf "%s" .Status) "single"}} selected{{end}}>Single</option>
+            <option value="joint"{{if eq (printf "%s" .Status) "joint"}} selected{{end}}>Married filing jointly</option>
+          </select>
+        </label>
+        <label>Tax year
+          <select name="year">
+            {{$y := .Year}}{{range .Years}}<option value="{{.}}"{{if eq . $y}} selected{{end}}>{{.}}</option>{{end}}
+          </select>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Deduction</legend>
+        <label class="radio"><input type="radio" name="deduction" value="standard"{{if not .Itemize}} checked{{end}}> Standard deduction</label>
+        <label class="radio"><input type="radio" name="deduction" value="itemized"{{if .Itemize}} checked{{end}}> Itemize charitable giving</label>
+        <label>Cash charitable contributions <small>used only when itemizing</small>
+          <input type="text" name="charity" inputmode="decimal" placeholder="5,000" value="{{.CharityIn}}">
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Retirement</legend>
+        <label>Traditional 401(k) contributions <small>pre-tax; enter 0 if your income is already W-2 Box 1</small>
+          <input type="text" name="k401" inputmode="decimal" placeholder="0" value="{{.K401In}}">
+        </label>
+        <label class="radio"><input type="checkbox" name="age50" value="1"{{if .Age50}} checked{{end}}> Age 50 or older (catch-up)</label>
+        <p class="hint">Roth 401(k) contributions and employer matches don't change this year's income tax, so leave them out.</p>
+      </fieldset>
+
+      <button type="submit">Estimate</button>
+    </form>
+  </aside>
+
+  <main class="results">
+    {{if .Error}}<p class="error" role="alert">{{.Error}}</p>{{end}}
+
+    {{if .Result}}{{with .Result}}
+    <section aria-live="polite">
+      <h2>{{.Year}} · {{.Status.Label}}</h2>
+
+      <div class="headline">
+        <div><span>Total tax</span><strong>{{money .TotalTax}}</strong></div>
+        <div><span>Effective rate</span><strong>{{pct2 .EffectiveRate}}</strong></div>
+        <div><span>Marginal rate</span><strong>{{pct .MarginalRate}}</strong></div>
+      </div>
+
+      <dl class="flow">
+        <div><dt>Gross income</dt><dd>{{money .Income}}</dd></div>
+        {{if .Contribution401k}}<div><dt>Traditional 401(k)</dt><dd>−{{money .Contribution401k}}</dd></div>{{end}}
+        <div><dt>{{.DeductionLabel}}</dt><dd>−{{money .Deduction}}</dd></div>
+        <div class="total"><dt>Taxable income</dt><dd>{{money .TaxableIncome}}</dd></div>
+      </dl>
+      {{if .Capped401k}}<p class="note">401(k) contributions were limited to {{money .Limit401k}}, the {{.Year}} maximum for your age group.</p>{{end}}
+      {{if .CharityCapped}}<p class="note">Cash charitable contributions are limited to 60% of income after 401(k), so the deduction was capped.</p>{{end}}
+      {{if .StandardIsHigher}}<p class="note">The standard deduction ({{money .StandardDeduction}}) is higher than your itemized amount.</p>{{end}}
+
+      <table>
+        <thead>
+          <tr><th>Rate</th><th>Bracket</th><th class="num">Income taxed</th><th class="num">Tax</th></tr>
+        </thead>
+        <tbody>
+        {{range .Brackets}}
+          <tr{{if eq .IncomeInBracket 0.0}} class="unused"{{end}}>
+            <td>{{pct .Rate}}</td>
+            <td>{{dollars .Lower}} – {{if .Unbounded}}and up{{else}}{{dollars .Upper}}{{end}}</td>
+            <td class="num">{{money .IncomeInBracket}}</td>
+            <td class="num">{{money .Tax}}</td>
+          </tr>
+        {{end}}
+        </tbody>
+        <tfoot>
+          <tr><th colspan="2">Total</th><th class="num">{{money .TaxableIncome}}</th><th class="num">{{money .TotalTax}}</th></tr>
+        </tfoot>
+      </table>
+    </section>
+    {{end}}{{else if not .Error}}
+    <p class="empty">Enter your details on the left and press Estimate.</p>
+    {{end}}
+
+    <p class="note">Estimate only. Federal income tax on ordinary income. Other deductions, credits, FICA and state taxes are not included.</p>
+  </main>
+</div>
+</body>
+</html>
